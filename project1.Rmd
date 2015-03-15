@@ -1,0 +1,221 @@
+---
+title: "Peer Assessment 1 - Reproducible Research"
+author: "Navnit Belur"
+date: "March 13, 2015"
+output: html_document
+--- 
+
+###Loading and preprocessing of the data
+
+The data source [zip] file has been downloaded and extracted to the corresponding csv file. 
+The data is read into a data frame using the read.csv command.
+The data is cleaned by removing all rows containing NA values as this could bias other calculations:
+
+```{r}
+activityRaw <- read.csv("activity.csv")
+activity <- na.omit(activityRaw)
+```
+
+
+Following is a summary of the "clean" data:
+
+```{r}
+summary(activity)
+```
+
+
+and the structure:
+
+```{r}
+str(activity)
+```
+
+
+###Mean total steps per day
+
+Note: the following code requires the 'dplyr' package.
+
+```{r, echo=FALSE, results='hide'}
+library("dplyr")
+```
+
+
+####1. Calculate the total number of steps taken per day. 
+
+First sumamrize the total steps and mean steps per day by grouping by date using dplyr
+
+```{r}
+activity %>%
+  group_by(date) %>%   
+    summarize (
+      totalSteps = sum(steps, na.rm = TRUE)
+    )
+```
+ 
+####2. Histograms
+
+Plotting the histogram of total steps per day by calculating the sum aggregates per day 
+and then plotting the histogram:
+
+```{r}
+totalStepsPerDay <- aggregate(activity$steps, by = list(activity$date), sum, na.rm = TRUE)
+hist(totalStepsPerDay$x, main = "Histogram of total steps per day", xlab = "Total Steps")
+```
+
+
+Plotting the histogram of average steps per day by calculating the mean aggregates per day 
+and then plotting the histogram:
+
+```{r}
+meanStepsPerDay <- aggregate(activity$steps, by = list(activity$date), mean, na.rm = TRUE)
+hist(meanStepsPerDay$x, main = "Histogram of mean steps per day", xlab = "Mean Steps")
+```
+
+####3. Mean and Median Summaries 
+
+Sumamrize the mean and median steps per day by grouping by date using dplyr:
+
+```{r}
+activity %>%
+  group_by(date) %>%   
+    summarize (
+      meanSteps = mean(steps, na.rm = TRUE),
+      medianSteps = median(steps, na.rm = TRUE)
+    )
+```
+
+
+### Average Daily Activity Pattern
+
+####1. Time series plot
+
+Below is the time series plot of the 5 minute intervals (x-axis) and the average number of steps taken, averaged across all days (y-axis):
+
+Note: We need to convert the intervals to a different format otherwise the data will not be handled correctly. Specifically there will be "jumps" from integer value 55 to 100 as opposed to going from "time" 00:55 to 01:00 ... and this occurs every hour when treating time as integers as is with the original data. However, since this assignment is about "reproducible" research I am ignoring this for now. 
+
+```{r}
+meanStepsPerInterval <- aggregate(activity$steps, by = list(activity$interval), mean, na.rm = TRUE)
+plot(x = meanStepsPerInterval$Group.1, 
+     y = meanStepsPerInterval$x, 
+     type = "l", 
+     main = "Average steps taken per interval", 
+     xlab = "Interval", 
+     ylab = "Average Steps")
+```
+
+
+####2. Time of max number of steps
+
+Maxmimum average #steps for a specific time interval and the corresponding time interval which contains the highest averaged step counts are:
+
+```{r}
+max(meanStepsPerInterval$x)
+meanStepsPerInterval$Group.1[which.max(meanStepsPerInterval$x)]
+```
+
+So around 8:35 AM is when the average step count is the highest (about 206). 
+
+
+### Imputing missing values
+
+####1. Number of missing values
+
+The number of missing values is the the numRows in the original raw data frame minus the numRows in the cleaned (removed NA rows) in the clean data set:
+
+```{r}
+nrow(activityRaw) - nrow(activity)
+```
+
+####2. Strategy for missing rows
+
+In order to compensate for the missing rows, a new data frame will be constructed using the **median** value of **ALL** steps.
+
+####3. Data frame construction
+
+Read the 'mod' activity from the csv file again and then replace all values of steps column that are NA with the median of ALL steps values:
+
+```{r}
+activityMod <- read.csv("activity.csv")
+str(activityMod)
+activityMod$steps[which(is.na(activityMod$steps))] <- median(activityMod$steps, na.rm = TRUE)
+str(activityMod)
+```
+
+Note that after the replacement, the [visible] NAs have been changed to the median value (0) in this case. 
+
+####4. Histograms, mean and median summaries
+
+
+First sumamrize the total, mean, and median steps for the new data frame per day by grouping by date using dplyr
+
+```{r}
+activityMod %>%
+  group_by(date) %>%   
+    summarize (
+      totalSteps = sum(steps, na.rm = TRUE),
+      meanSteps = mean(steps, na.rm = TRUE),
+      medianSteps = median(steps, na.rm = TRUE)
+    )
+```
+ 
+Plotting the histogram of total steps per day by calculating the sum aggregates per day 
+and then plotting the histogram:
+
+```{r}
+totalStepsPerDayMod <- aggregate(activityMod$steps, by = list(activityMod$date), sum, na.rm = TRUE)
+hist(totalStepsPerDayMod$x, main = "Histogram of total steps per day (modified)", xlab = "Total Steps")
+```
+
+Plotting the histogram of average steps per day by calculating the mean aggregates per day 
+and then plotting the histogram:
+
+```{r}
+meanStepsPerDayMod <- aggregate(activityMod$steps, by = list(activityMod$date), mean, na.rm = TRUE)
+hist(meanStepsPerDayMod$x, main = "Histogram of mean steps per day (modified)", xlab = "Mean Steps")
+```
+
+By inspection, we see that the new mean and medians and especially the histograms are now biased and the frequency of mean steps is higher in the lower averages compared to the cleaned data set. 
+
+
+###Weekdays and Weekends
+
+####1. Segregate into weekdays and weekends
+
+First split find the corresponding 'days' for each date and mutate the data frame to add this column. Then filter out weekdays and weekends into separate data frames as needed for plotting. 
+
+
+```{r}
+activity <- mutate(activity, days = as.factor(weekdays(as.Date(as.character(activity$date)))))
+
+activityWeekdays <- filter(activity, (days == "Monday" | days == "Tuesday" | days == "Wednesday" | days == "Thursday" | days == "Friday"))
+activityWeekends <- filter(activity, (days == "Saturday" | days == "Sunday"))
+str(activityWeekdays)
+str(activityWeekends)
+
+```
+
+####2. Plots
+
+```{r}
+par(mfrow = c(2,1))
+
+# plot 1 
+meanStepsPerIntervalWeekdays <- aggregate(activityWeekdays$steps, by = list(activityWeekdays$interval), mean, na.rm = TRUE)
+plot(x = meanStepsPerIntervalWeekdays$Group.1, 
+     y = meanStepsPerIntervalWeekdays$x, 
+     type = "l", 
+     main = "Average steps taken per interval (Weekdays)", 
+     xlab = "Interval", 
+     ylab = "Average Steps")
+
+
+# plot 2 
+meanStepsPerIntervalWeekends <- aggregate(activityWeekends$steps, by = list(activityWeekends$interval), mean, na.rm = TRUE)
+plot(x = meanStepsPerIntervalWeekends$Group.1, 
+     y = meanStepsPerIntervalWeekends$x, 
+     type = "l", 
+     main = "Average steps taken per interval (Weekends)", 
+     xlab = "Interval", 
+     ylab = "Average Steps")
+
+```
